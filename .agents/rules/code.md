@@ -63,7 +63,13 @@ trigger: always_on
 
 ---
 
-## 6. 自检清单
+## 6. UI
+
+- 使用ui-ux-pro-max-skill这个skill
+
+---
+
+## 7. 自检清单
 
 生成代码后内部验证（不需要输出）：
 
@@ -75,3 +81,4 @@ trigger: always_on
 - [ ] 深层更新用了 `immer`
 - [ ] 无空 `catch`
 - [ ] 保留了无关注释
+
