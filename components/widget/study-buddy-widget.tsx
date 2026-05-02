@@ -141,7 +141,7 @@ export function StudyBuddyWidget({ userId = "user-passive-1", mockHour, mockMinu
         const data = await response.json();
         setDynamicNudge(data.message);
       } catch (e) {
-        setDynamicNudge(nudgeMessage);
+        setDynamicNudge(nudgeMessage ?? null);
       } finally {
         setIsAiGenerating(false);
       }

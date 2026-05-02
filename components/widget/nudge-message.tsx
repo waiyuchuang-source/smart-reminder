@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function NudgeMessage({ message, onStart, taskTitle }: { message: string | null; onStart?: () => void; taskTitle?: string }) {
+export function NudgeMessage({ message, onStart, taskTitle, isGenerating }: { message: string | null; onStart?: () => void; taskTitle?: string; isGenerating?: boolean }) {
   const [displayedText, setDisplayedText] = useState("");
   
   if (!message) return null;

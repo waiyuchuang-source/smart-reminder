@@ -231,11 +231,13 @@ export default function Home() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.15 }}
             >
-              <AIOptimizer 
-                user={user} 
-                tasks={tasks || []} 
-                onStartTask={(id) => toggleTask(id)} 
-              />
+              {user && (
+                <AIOptimizer 
+                  user={user} 
+                  tasks={tasks || []} 
+                  onStartTask={(id) => toggleTask(id)} 
+                />
+              )}
             </motion.div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -255,10 +257,12 @@ export default function Home() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.25 }}
               >
-                <AIMentalCard 
-                  user={user} 
-                  pendingTaskCount={pendingTasks.length} 
-                />
+                {user && (
+                  <AIMentalCard 
+                    user={user} 
+                    pendingTaskCount={pendingTasks.length} 
+                  />
+                )}
               </motion.div>
             </div>
 
