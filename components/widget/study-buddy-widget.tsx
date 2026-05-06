@@ -14,16 +14,15 @@ import { Bot, X, Users, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTeamStore } from "@/stores/team-store";
 import { nudgeGovernor } from "@/lib/nudge-governor";
-import { useTaskStore } from "@/stores/task-store";
+import { trackEvent } from "@/lib/analytics";
 
 function DeskMateStatus({ buddyName, buddyId, currentUserName }: { buddyName: string; buddyId?: string; currentUserName?: string }) {
-  const userTasks = useTaskStore((state) => state.userTasks);
-  const tasks = buddyId ? (userTasks[buddyId] || []) : [];
-  const isBuddyDone = tasks.length > 0 && tasks.every(t => t.status === "completed");
+  const { tasks: buddyTasks } = useTasks(buddyId || "");
+  const isBuddyDone = buddyTasks.length > 0 && buddyTasks.every(t => t.status === "completed");
 
   if (isBuddyDone) {
     return (
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         className="flex flex-col items-center gap-2 rounded-2xl bg-green-50/50 p-4 border border-green-100 dark:bg-green-900/10 dark:border-green-900/30"
@@ -68,7 +67,7 @@ function NudgeBuddyButton({ buddyName, buddyId, senderName }: { buddyName: strin
 
       setStatus("sent");
       setTimeout(() => setStatus("idle"), 3000);
-    } catch (e) {
+    } catch {
       setStatus("idle");
     }
   };
@@ -102,7 +101,7 @@ function NudgeBuddyButton({ buddyName, buddyId, senderName }: { buddyName: strin
 export function StudyBuddyWidget({ userId = "user-passive-1", mockHour, mockMinute }: { userId?: string; mockHour?: number; mockMinute?: number }) {
   const { user, isLoading: userLoading } = useUser(userId);
   const { tasks, pendingTasks, isLoading: tasksLoading, toggleTask } = useTasks(userId);
-  const { nudgeMessage, isAppropriateTime, isLoading: nudgeLoading } = useNudge(userId, mockHour, mockMinute);
+  const { nudgeMessage, isAppropriateTime, copyId, tone, experimentId, variantId, isLoading: nudgeLoading } = useNudge(userId, mockHour, mockMinute);
 
   const { isOpen, toggleOpen, setOpen } = useWidgetStore();
   const [dynamicNudge, setDynamicNudge] = useState<string | null>(null);
@@ -113,6 +112,7 @@ export function StudyBuddyWidget({ userId = "user-passive-1", mockHour, mockMinu
   const unreadCount = myNotifications.filter(n => !n.isRead).length;
 
   const lastNudgeId = useRef<string | null>(null);
+  const trackedCopyId = useRef<string | null>(null);
 
   useEffect(() => {
     if (isOpen && unreadCount > 0) {
@@ -128,6 +128,14 @@ export function StudyBuddyWidget({ userId = "user-passive-1", mockHour, mockMinu
     }
   }, [myNotifications, isOpen, setOpen]);
 
+  // Track nudge_viewed when widget opens and copyId is available
+  useEffect(() => {
+    if (isOpen && copyId && tone && copyId !== trackedCopyId.current) {
+      trackedCopyId.current = copyId;
+      trackEvent({ userId, copyId, tone, action: "nudge_viewed", experimentId, variantId });
+    }
+  }, [isOpen, copyId, tone, userId]);
+
   useEffect(() => {
     const fetchAiNudge = async () => {
       if (!user || !tasks || isAiGenerating) return;
@@ -140,7 +148,7 @@ export function StudyBuddyWidget({ userId = "user-passive-1", mockHour, mockMinu
         });
         const data = await response.json();
         setDynamicNudge(data.message);
-      } catch (e) {
+      } catch {
         setDynamicNudge(nudgeMessage ?? null);
       } finally {
         setIsAiGenerating(false);
@@ -152,6 +160,10 @@ export function StudyBuddyWidget({ userId = "user-passive-1", mockHour, mockMinu
 
   const handleStartTask = async () => {
     if (pendingTasks.length > 0) {
+      // Track nudge_clicked
+      if (copyId && tone) {
+        trackEvent({ userId, copyId, tone, action: "nudge_clicked", experimentId, variantId });
+      }
       toggleTask(pendingTasks[0].id);
       nudgeGovernor.recordDelivery(userId, "standard_nudge");
     }
@@ -218,9 +230,8 @@ export function StudyBuddyWidget({ userId = "user-passive-1", mockHour, mockMinu
               : "border-blue-100/50 dark:border-blue-900/20"
               }`}
           >
-            {/* Header with Background Glow */}
             <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-blue-50/50 to-transparent dark:from-blue-900/10 pointer-events-none" />
-            
+
             <div className="relative mb-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className={`flex h-10 w-10 items-center justify-center rounded-2xl shadow-inner ${isAllDone ? 'bg-amber-100 text-amber-600' : 'bg-blue-600 text-white'}`}>
@@ -243,7 +254,6 @@ export function StudyBuddyWidget({ userId = "user-passive-1", mockHour, mockMinu
               </button>
             </div>
 
-            {/* Content */}
             <div className="relative">
               {isLoading ? (
                 <div className="flex flex-col gap-4">
@@ -257,7 +267,6 @@ export function StudyBuddyWidget({ userId = "user-passive-1", mockHour, mockMinu
                   animate={{ opacity: 1 }}
                   className="space-y-6"
                 >
-                  {/* Integrated Teammate Nudges at the Top */}
                   <AnimatePresence>
                     {myNotifications.length > 0 && (
                       <motion.div

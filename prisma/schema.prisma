@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id                    String   @id
+  name                  String
+  avatar                String?
+  segment               String // "active" | "passive" | "at-risk"
+  streakDays            Int      @default(0)
+  lastActiveAt          DateTime
+  preferredReminderTime String?
+  deskMateName          String?
+  deskMateId            String?
+  isOnline              Boolean  @default(false)
+  rankLevel             Int      @default(1)
+  rankTitle             String   @default("学习新手")
+  teamMateIds           String?  // JSON array
+
+  tasks                 Task[]
+  nudgeLogs             NudgeLog[]
+  experimentAssignments ExperimentAssignment[]
+}
+
+model Task {
+  id              String @id
+  title           String
+  course          String
+  durationMinutes Int
+  status          String @default("pending")
+  dueDate         String
+  userId          String
+  user            User   @relation(fields: [userId], references: [id])
+}
+
+model NudgeCopy {
+  id            String   @id
+  tone          String
+  targetSegment String
+  template      String
+  createdAt     DateTime @default(now())
+  baseScore     Float    @default(5)
+  tags          String?  // JSON array
+
+  nudgeLogs NudgeLog[]
+}
+
+model NudgeLog {
+  id           String   @id @default(cuid())
+  userId       String
+  copyId       String
+  tone         String
+  action       String // "nudge_viewed" | "nudge_clicked" | "task_completed" | "dismissed"
+  timestamp    DateTime @default(now())
+  experimentId String?
+  variantId    String?
+
+  user User      @relation(fields: [userId], references: [id])
+  copy NudgeCopy @relation(fields: [copyId], references: [id])
+
+  @@index([userId, timestamp])
+  @@index([tone, action])
+  @@index([experimentId, variantId, action])
+}
+
+model ToneWeight {
+  tone   String @id
+  weight Float
+}
+
+model Experiment {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      String   @default("active")
+  type        String
+  variants    String // JSON array
+  createdAt   DateTime @default(now())
+
+  assignments ExperimentAssignment[]
+}
+
+model ExperimentAssignment {
+  id           String   @id @default(cuid())
+  userId       String
+  experimentId String
+  variantId    String
+  assignedAt   DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id])
+  experiment Experiment @relation(fields: [experimentId], references: [id])
+
+  @@unique([userId, experimentId])
+  @@index([experimentId, variantId])
+}
+
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @default(now()) @updatedAt
+}

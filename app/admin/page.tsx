@@ -6,10 +6,14 @@ import { useAdminStats } from "@/hooks/use-admin-stats";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { BarChart3, RefreshCw, Settings2, Users, CheckCircle2 } from "lucide-react";
+import { BarChart3, RefreshCw, Settings2, Users, CheckCircle2, Activity, Shield } from "lucide-react";
 import { NudgeTone, ToneWeights } from "@/lib/types";
 import { PromptEditor } from "@/components/admin/prompt-editor";
 import { ChurnAlertPanel } from "@/components/admin/churn-alert-panel";
+import { ExperimentPanel } from "@/components/admin/experiment-panel";
+import { useFatigue } from "@/hooks/use-fatigue";
+import { useFrequencyConfig } from "@/hooks/use-frequency-config";
+import type { FrequencyConfig } from "@/lib/frequency-config";
 
 interface PromptTemplate {
   id: string;
@@ -88,12 +92,19 @@ export default function AdminDashboard() {
     await mutateChurn();
   };
   
-  // Local state for weights before saving
-  const [localWeights, setLocalWeights] = useState<ToneWeights | null>(null);
+  const { fatigueData, mutate: mutateFatigue } = useFatigue();
+  const { config: freqConfig, mutate: mutateFreqConfig } = useFrequencyConfig();
 
-  // Init local weights from server data
+  const [localWeights, setLocalWeights] = useState<ToneWeights | null>(null);
+  const [localFreqConfig, setLocalFreqConfig] = useState<FrequencyConfig | null>(null);
+  const [isSavingFreq, setIsSavingFreq] = useState(false);
+
   if (data?.weights && !localWeights) {
     setLocalWeights(data.weights);
+  }
+
+  if (freqConfig && !localFreqConfig) {
+    setLocalFreqConfig(freqConfig);
   }
 
   const handleGenerate = async () => {
@@ -118,6 +129,21 @@ export default function AdminDashboard() {
       mutate();
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveFreqConfig = async () => {
+    if (!localFreqConfig) return;
+    setIsSavingFreq(true);
+    try {
+      await fetch("/api/admin/frequency-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(localFreqConfig),
+      });
+      mutateFreqConfig();
+    } finally {
+      setIsSavingFreq(false);
     }
   };
 
@@ -158,8 +184,8 @@ export default function AdminDashboard() {
               <Users className="h-4 w-4 text-zinc-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">15.2%</div>
-              <p className="text-xs text-green-500">↑ 较上周增长 7.2%</p>
+              <div className="text-2xl font-bold">{data?.openRate?.toFixed(1) ?? "—"}%</div>
+              <p className="text-xs text-zinc-500">总曝光 {data?.totalViews ?? 0} · 关闭率 {data?.overallDismissRate?.toFixed(1) ?? 0}%</p>
             </CardContent>
           </Card>
           <Card>
@@ -168,8 +194,8 @@ export default function AdminDashboard() {
               <CheckCircle2 className="h-4 w-4 text-zinc-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">68.5%</div>
-              <p className="text-xs text-green-500">↑ 距目标 75% 还差 6.5%</p>
+              <div className="text-2xl font-bold">{data?.completionRate?.toFixed(1) ?? "—"}%</div>
+              <p className="text-xs text-zinc-500">完成 {data?.totalCompleted ?? 0} · 关闭 {data?.totalDismissed ?? 0}</p>
             </CardContent>
           </Card>
         </div>
@@ -201,6 +227,7 @@ export default function AdminDashboard() {
                     <div className="flex justify-between text-xs text-zinc-500">
                       <span>曝光: {stat.views}</span>
                       <span>点击: {stat.clicks}</span>
+                      <span>关闭: {stat.dismissed} ({stat.dismissRate.toFixed(1)}%)</span>
                     </div>
                   </div>
                 ))}
@@ -283,6 +310,102 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Row 4: Frequency Config + Fatigue Monitor */}
+        <div className="grid gap-8 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-zinc-600" />
+                <div>
+                  <CardTitle>频控与疲劳度配置</CardTitle>
+                  <CardDescription>调整频率控制参数和疲劳度阈值</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {localFreqConfig ? (
+                <div className="space-y-5">
+                  {([
+                    { key: "globalCoolingMinutes" as const, label: "全局冷却（分钟）", min: 1, max: 120 },
+                    { key: "typeCoolingMinutes" as const, label: "同类冷却（分钟）", min: 1, max: 480 },
+                    { key: "maxDailyNudges" as const, label: "每日推送上限", min: 1, max: 50 },
+                    { key: "fatigueThresholdHigh" as const, label: "高疲劳阈值（抑制推送）", min: 1, max: 100 },
+                    { key: "fatigueThresholdMedium" as const, label: "中疲劳阈值（精选推送）", min: 0, max: 99 },
+                  ]).map((field) => (
+                    <div key={field.key} className="flex items-center justify-between gap-4">
+                      <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 min-w-0 flex-1">{field.label}</label>
+                      <input
+                        type="number"
+                        min={field.min}
+                        max={field.max}
+                        value={localFreqConfig[field.key]}
+                        onChange={(e) => setLocalFreqConfig({ ...localFreqConfig, [field.key]: parseInt(e.target.value) || 0 })}
+                        className="w-20 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-right dark:border-zinc-700 dark:bg-zinc-900"
+                      />
+                    </div>
+                  ))}
+                  <Button className="w-full mt-2" onClick={handleSaveFreqConfig} disabled={isSavingFreq}>
+                    {isSavingFreq ? "保存中..." : "保存频控配置"}
+                  </Button>
+                </div>
+              ) : (
+                <div className="h-48 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-zinc-600" />
+                  <div>
+                    <CardTitle>用户疲劳度监控</CardTitle>
+                    <CardDescription>实时疲劳状态与关闭率</CardDescription>
+                  </div>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => mutateFatigue()}>
+                  <RefreshCw className="mr-1 h-3 w-3" /> 刷新
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {fatigueData.map((entry) => {
+                  const color = entry.fatigue.level === "high" ? "bg-red-500" : entry.fatigue.level === "medium" ? "bg-amber-500" : "bg-green-500";
+                  const levelText = entry.fatigue.level === "high" ? "高" : entry.fatigue.level === "medium" ? "中" : "低";
+                  return (
+                    <div key={entry.userId} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium">{entry.userName}</span>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={entry.fatigue.level === "high" ? "destructive" : entry.fatigue.level === "medium" ? "secondary" : "outline"}>
+                            疲劳{levelText} {entry.fatigue.score}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                        <div className={`h-full ${color} transition-all`} style={{ width: `${entry.fatigue.score}%` }} />
+                      </div>
+                      <div className="flex justify-between text-[11px] text-zinc-500">
+                        <span>关闭率: {(entry.fatigue.factors.dismissRate * 100).toFixed(1)}%</span>
+                        <span>近2h密度: {entry.fatigue.factors.recentDensity}</span>
+                        <span>时段因子: {entry.fatigue.factors.timeOfDayFactor}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {fatigueData.length === 0 && (
+                  <p className="text-sm text-zinc-400 text-center py-8">暂无用户数据</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Row 5: A/B Experiment Panel */}
+        <ExperimentPanel />
 
       </main>
     </div>

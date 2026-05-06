@@ -8,10 +8,19 @@ type AdminStatsResponse = {
     tone: string;
     views: number;
     clicks: number;
+    dismissed: number;
     ctr: number;
+    dismissRate: number;
   }[];
   weights: ToneWeights;
   totalCopies: number;
+  totalViews: number;
+  totalClicks: number;
+  totalDismissed: number;
+  totalCompleted: number;
+  openRate: number;
+  completionRate: number;
+  overallDismissRate: number;
 };
 
 export function useAdminStats() {

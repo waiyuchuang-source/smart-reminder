@@ -1,29 +1,32 @@
 "use client";
 
 import { useState } from "react";
+import useSWR from "swr";
 import { StudyBuddyWidget } from "@/components/widget/study-buddy-widget";
 import { useTasks } from "@/hooks/use-tasks";
 import { useUser } from "@/hooks/use-user";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  BookOpen, 
-  CheckCircle2, 
-  Circle, 
-  Users, 
-  Trophy, 
-  Clock, 
-  Zap, 
+import {
+  BookOpen,
+  CheckCircle2,
+  Circle,
+  Users,
+  Trophy,
+  Clock,
+  Zap,
   Flame,
   LayoutDashboard,
   Bell
 } from "lucide-react";
 import { useTeamStore } from "@/stores/team-store";
-import { MOCK_USERS } from "@/lib/mock-data";
 import { motion } from "framer-motion";
 import { AIOptimizer } from "@/components/dashboard/ai-optimizer";
 import { AIMentalCard } from "@/components/dashboard/ai-mental-card";
 import { MiniRankCard } from "@/components/dashboard/mini-rank-card";
+import type { User } from "@/lib/types";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function Home() {
   const [currentUser, setCurrentUser] = useState("user-passive-1");
@@ -31,6 +34,7 @@ export default function Home() {
   const [mockMinute, setMockMinute] = useState<number | undefined>(undefined);
   const { user } = useUser(currentUser);
   const { tasks, pendingTasks, completedTasks, isLoading, toggleTask } = useTasks(currentUser);
+  const { data: allUsers } = useSWR<User[]>("/api/users", fetcher);
 
   const handleTimeChange = (val: string) => {
     if (val === "") {
@@ -43,7 +47,7 @@ export default function Home() {
     }
   };
 
-  const simulatedTimeStr = mockHour !== undefined 
+  const simulatedTimeStr = mockHour !== undefined
     ? `${mockHour}:${(mockMinute ?? 0).toString().padStart(2, "0")}`
     : "系统时间";
 
@@ -51,7 +55,7 @@ export default function Home() {
 
   const handleSimulateOnline = () => {
     const teammateId = user?.teamMateIds?.[0];
-    const teammate = MOCK_USERS.find(u => u.id === teammateId);
+    const teammate = allUsers?.find(u => u.id === teammateId);
     sendSignal({
       senderName: teammate?.name || "神秘队友",
       recipientId: currentUser,
@@ -74,7 +78,7 @@ export default function Home() {
               </div>
               <span className="text-xl tracking-tight">智学助手</span>
             </div>
-            
+
             <nav className="hidden items-center gap-4 md:flex">
               <Badge variant="secondary" className="cursor-pointer bg-zinc-100 px-3 py-1 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400">
                 <LayoutDashboard className="mr-1.5 h-3.5 w-3.5" /> 控制面板
@@ -96,7 +100,7 @@ export default function Home() {
 
             <div className="h-6 w-px bg-zinc-200 dark:bg-zinc-800" />
 
-            <select 
+            <select
               className="h-9 rounded-full border border-zinc-200 bg-white px-3 text-sm focus:ring-2 focus:ring-blue-500 dark:border-zinc-800 dark:bg-zinc-900"
               value={mockHour === undefined ? "" : simulatedTimeStr}
               onChange={(e) => handleTimeChange(e.target.value)}
@@ -106,12 +110,12 @@ export default function Home() {
               <option value="21:00">21:00 (复习时)</option>
             </select>
 
-            <select 
+            <select
               className="h-9 rounded-full border border-zinc-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-blue-500 dark:border-zinc-800 dark:bg-zinc-900"
               value={currentUser}
               onChange={(e) => setCurrentUser(e.target.value)}
             >
-              {MOCK_USERS.map(u => (
+              {(allUsers || []).map(u => (
                 <option key={u.id} value={u.id}>{u.name} ({u.segment})</option>
               ))}
             </select>
@@ -122,7 +126,7 @@ export default function Home() {
       <main className="mx-auto w-full max-w-7xl px-6 py-8">
         {/* Welcome Section */}
         <section className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
           >
@@ -133,7 +137,7 @@ export default function Home() {
               当前学习效率 <span className="font-semibold text-blue-600">85%</span>，保持专注！
             </p>
           </motion.div>
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             className="flex gap-2"
@@ -153,9 +157,9 @@ export default function Home() {
 
         {/* Bento Grid Layout */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          
+
           {/* Module: Tasks (The Core) */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -183,7 +187,7 @@ export default function Home() {
                       {pendingTasks.map(task => (
                         <div key={task.id} className="group flex items-center justify-between p-6 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/20">
                           <div className="flex items-center gap-4">
-                            <button 
+                            <button
                               onClick={() => toggleTask(task.id)}
                               className="relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-zinc-200 transition-all group-hover:border-blue-500 dark:border-zinc-700"
                             >
@@ -225,17 +229,17 @@ export default function Home() {
 
           {/* Right Sidebar Modules */}
           <div className="space-y-6 lg:col-span-4">
-            
+
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.15 }}
             >
               {user && (
-                <AIOptimizer 
-                  user={user} 
-                  tasks={tasks || []} 
-                  onStartTask={(id) => toggleTask(id)} 
+                <AIOptimizer
+                  user={user}
+                  tasks={tasks || []}
+                  onStartTask={(id) => toggleTask(id)}
                 />
               )}
             </motion.div>
@@ -246,9 +250,9 @@ export default function Home() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <MiniRankCard 
-                  rankLevel={user?.rankLevel || 1} 
-                  rankTitle={user?.rankTitle || "学徒"} 
+                <MiniRankCard
+                  rankLevel={user?.rankLevel || 1}
+                  rankTitle={user?.rankTitle || "学徒"}
                 />
               </motion.div>
 
@@ -258,16 +262,16 @@ export default function Home() {
                 transition={{ delay: 0.25 }}
               >
                 {user && (
-                  <AIMentalCard 
-                    user={user} 
-                    pendingTaskCount={pendingTasks.length} 
+                  <AIMentalCard
+                    user={user}
+                    pendingTaskCount={pendingTasks.length}
                   />
                 )}
               </motion.div>
             </div>
 
             {/* Module: Teammate Status */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
@@ -279,7 +283,7 @@ export default function Home() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4 pt-2">
-                    {MOCK_USERS.filter(u => u.id !== currentUser).slice(0, 3).map(buddy => (
+                    {(allUsers || []).filter(u => u.id !== currentUser).slice(0, 3).map(buddy => (
                       <div key={buddy.id} className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-full bg-zinc-100 p-1 ring-2 ring-zinc-50 dark:bg-zinc-800 dark:ring-zinc-800">
@@ -302,7 +306,7 @@ export default function Home() {
             </motion.div>
 
             {/* Module: Quick Notification Center */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
@@ -332,7 +336,6 @@ export default function Home() {
         <p className="text-sm text-zinc-400">© 2026 智学助手. 助力高效学习。</p>
       </footer>
 
-      {/* The Study Buddy Widget Component (Renamed to Popup) */}
       <StudyBuddyWidget userId={currentUser} mockHour={mockHour} mockMinute={mockMinute} />
     </div>
   );

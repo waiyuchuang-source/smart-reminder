@@ -1,6 +1,5 @@
-import { MOCK_USERS } from "@/lib/mock-data";
+import { prisma } from "@/lib/prisma";
 
-/** 流失预警阈值（天） */
 const CHURN_THRESHOLD_DAYS = 4;
 
 export interface ChurnAlert {
@@ -14,27 +13,27 @@ export interface ChurnAlert {
 
 const parentNotifications = new Map<string, { notifiedAt: string }>();
 
-export function detectChurnUsers(): ChurnAlert[] {
+export async function detectChurnUsers(): Promise<ChurnAlert[]> {
   const now = Date.now();
+  const users = await prisma.user.findMany();
 
-  return MOCK_USERS.filter((u) => {
-    const lastActive = new Date(u.lastActiveAt);
-    const daysInactive = Math.floor((now - lastActive.getTime()) / (1000 * 60 * 60 * 24));
-    return daysInactive >= CHURN_THRESHOLD_DAYS;
-  }).map((u) => {
-    const lastActive = new Date(u.lastActiveAt);
-    const daysInactive = Math.floor((now - lastActive.getTime()) / (1000 * 60 * 60 * 24));
-    const notification = parentNotifications.get(u.id);
-
-    return {
-      userId: u.id,
-      userName: u.name,
-      daysInactive,
-      lastActiveAt: u.lastActiveAt,
-      parentNotified: !!notification,
-      notifiedAt: notification?.notifiedAt,
-    };
-  });
+  return users
+    .filter((u) => {
+      const daysInactive = Math.floor((now - u.lastActiveAt.getTime()) / (1000 * 60 * 60 * 24));
+      return daysInactive >= CHURN_THRESHOLD_DAYS;
+    })
+    .map((u) => {
+      const daysInactive = Math.floor((now - u.lastActiveAt.getTime()) / (1000 * 60 * 60 * 24));
+      const notification = parentNotifications.get(u.id);
+      return {
+        userId: u.id,
+        userName: u.name,
+        daysInactive,
+        lastActiveAt: u.lastActiveAt.toISOString(),
+        parentNotified: !!notification,
+        notifiedAt: notification?.notifiedAt,
+      };
+    });
 }
 
 export function markParentNotified(userId: string): void {

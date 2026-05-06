@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { detectChurnUsers, markParentNotified } from "@/services/churn-detector.server";
 import { sendParentWeeklyReport } from "@/services/external-push.server";
-import { MOCK_USERS, MOCK_TASKS } from "@/lib/mock-data";
 
 export async function GET() {
-  const churnUsers = detectChurnUsers();
+  const churnUsers = await detectChurnUsers();
   return Response.json({ success: true, data: { alerts: churnUsers } });
 }
 
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return Response.json(
       { success: false, error: { code: "INVALID_BODY", message: "Request body must be JSON" } },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -23,21 +23,35 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return Response.json(
       { success: false, error: { code: "MISSING_USER_ID", message: "userId is required" } },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  const user = MOCK_USERS.find((u) => u.id === userId);
-  if (!user) {
+  const dbUser = await prisma.user.findUnique({ where: { id: userId } });
+  if (!dbUser) {
     return Response.json(
       { success: false, error: { code: "USER_NOT_FOUND", message: `User ${userId} not found` } },
-      { status: 404 }
+      { status: 404 },
     );
   }
 
-  const tasks = MOCK_TASKS[userId] ?? [];
-  const pushResult = await sendParentWeeklyReport(user, tasks);
+  const rawTasks = await prisma.task.findMany({ where: { userId } });
+  const tasks = rawTasks.map((t) => ({
+    ...t,
+    status: t.status as "pending" | "in-progress" | "completed",
+  }));
+  const user = {
+    ...dbUser,
+    segment: dbUser.segment as "active" | "passive" | "at-risk",
+    avatar: dbUser.avatar ?? undefined,
+    lastActiveAt: dbUser.lastActiveAt.toISOString(),
+    teamMateIds: dbUser.teamMateIds ? JSON.parse(dbUser.teamMateIds) : [],
+    preferredReminderTime: dbUser.preferredReminderTime ?? undefined,
+    deskMateName: dbUser.deskMateName ?? undefined,
+    deskMateId: dbUser.deskMateId ?? undefined,
+  };
 
+  const pushResult = await sendParentWeeklyReport(user, tasks);
   markParentNotified(userId);
 
   return Response.json({ success: true, data: { push: pushResult } });

@@ -1,25 +1,45 @@
-import { useTaskStore } from "@/stores/task-store";
+import useSWR from "swr";
+import type { Task } from "@/lib/types";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function useTasks(userId: string = "user-passive-1") {
-  const { userTasks, toggleTaskStatus } = useTaskStore();
-  
-  const data = userTasks[userId] || [];
-  const pendingTasks = data.filter(t => t.status !== "completed");
-  const completedTasks = data.filter(t => t.status === "completed");
+  const { data, error, isLoading, mutate } = useSWR<Task[]>(
+    `/api/tasks?userId=${userId}`,
+    fetcher,
+  );
+
+  const tasks = data || [];
+  const pendingTasks = tasks.filter((t) => t.status !== "completed");
+  const completedTasks = tasks.filter((t) => t.status === "completed");
+
+  const toggleTask = async (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    const newStatus = task.status === "completed" ? "pending" : "completed";
+
+    await mutate(
+      tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)),
+      false,
+    );
+
+    await fetch("/api/tasks", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId, status: newStatus }),
+    });
+
+    mutate();
+  };
 
   return {
-    tasks: data,
+    tasks,
     pendingTasks,
     completedTasks,
-    isLoading: false,
-    isError: null,
-    toggleTask: (taskId: string) => toggleTaskStatus(userId, taskId),
-    // For compatibility with previous code using mutate
-    mutate: (callback: any) => {
-      // Allow the manual mutation if needed, though toggleTask is preferred
-      if (typeof callback === 'function') {
-        // This is a mock for the previous mutate pattern
-      }
-    }, 
+    isLoading,
+    isError: error,
+    toggleTask,
+    mutate,
   };
 }

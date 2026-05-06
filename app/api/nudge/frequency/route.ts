@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-/**
- * 服务端频控 API
- * 将频控状态从客户端 localStorage 迁移到服务端内存，
- * 确保频控决策不可被客户端绕过。
- */
+import { getFrequencyConfig } from "@/lib/frequency-config";
 
 interface FrequencyRecord {
   userId: string;
@@ -12,31 +7,24 @@ interface FrequencyRecord {
   timestamp: number;
 }
 
-// 服务端内存频控存储（生产环境应替换为 Redis）
 const frequencyStore = new Map<string, FrequencyRecord[]>();
-
-const GLOBAL_COOLING_MS = 15 * 60 * 1000; // 15 分钟全局冷却
-const TYPE_COOLING_MS = 60 * 60 * 1000; // 60 分钟同类型冷却
-const MAX_DAILY_NUDGES = 5; // 每日最大推送次数
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** GET: 查询用户频控状态 */
 export async function GET(request: NextRequest) {
   const userId = request.nextUrl.searchParams.get("userId");
   if (!userId) {
-    return NextResponse.json(
-      { error: "userId is required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "userId is required" }, { status: 400 });
   }
+
+  const config = await getFrequencyConfig();
+  const globalCoolingMs = config.globalCoolingMinutes * 60 * 1000;
 
   const records = frequencyStore.get(userId) ?? [];
   const now = Date.now();
 
-  // 检查全局冷却
   const lastRecord = records[0];
-  if (lastRecord && now - lastRecord.timestamp < GLOBAL_COOLING_MS) {
-    const remainMs = GLOBAL_COOLING_MS - (now - lastRecord.timestamp);
+  if (lastRecord && now - lastRecord.timestamp < globalCoolingMs) {
+    const remainMs = globalCoolingMs - (now - lastRecord.timestamp);
     return NextResponse.json({
       allowed: false,
       reason: "global_cooling",
@@ -45,9 +33,8 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // 检查每日上限
   const dailyCount = getDailyCount(records, now);
-  if (dailyCount >= MAX_DAILY_NUDGES) {
+  if (dailyCount >= config.maxDailyNudges) {
     return NextResponse.json({
       allowed: false,
       reason: "daily_limit",

@@ -1,12 +1,16 @@
-/** @vitest-environment happy-dom */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { nudgeGovernor } from "../nudge-governor";
+import { storageAdapter } from "../storage-adapter";
 
 describe("Nudge Governor — 频控边界测试", () => {
   beforeEach(() => {
-    localStorage.clear();
-    nudgeGovernor.clearHistory("test-user");
     vi.useFakeTimers();
+    storageAdapter.clearAll();
+    nudgeGovernor.clearHistory("test-user");
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("首次请求应当放行", () => {
